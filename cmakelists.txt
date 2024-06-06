@@ -7,5 +7,5 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 link_libraries(ws2_32 wsock32)
 
-add_executable(client 1.cpp)
-add_executable(server 2.cpp)
+add_executable(client client.cpp)
+add_executable(server server.cpp)
