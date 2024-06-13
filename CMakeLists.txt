@@ -5,7 +5,6 @@ project(test)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-link_libraries(ws2_32 wsock32)
 include_directories(header)
 aux_source_directory(src srcCode)
 
