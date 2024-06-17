@@ -20,9 +20,25 @@ int main(){
     while(1){
         char s[maxn] = { 0 };
         std::cin >> s;
-        int writeSize = 0;
-        writeSize = write(sock, s, sizeof(s));
-        Err::errCheck(writeSize == -1, "write failed");
+        int writeSize = write(sock, s, sizeof(s));
+        if(writeSize == -1){
+            printf("has been disconnect\n");
+            break;
+        }
+        memset(s, 0, sizeof(s));
+        int readSize = read(sock, s, sizeof(s));
+        if(readSize > 0){
+            printf("get message from server: %s\n", s);
+        }
+        else if(readSize == -1){
+            printf("read error\n");
+            break;
+        }
+        else if(readSize == 0){
+            printf("has been disconnect\n");
+            break;
+        }
+
     }
     close(sock);
 }

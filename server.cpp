@@ -4,6 +4,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errproccess.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+
 
 
 const int maxn = 10000;
@@ -21,22 +24,62 @@ int main()
 
     Err::errCheck(bind(sock, (sockaddr *)&serverAddr, sizeof(serverAddr)) == -1, "bind failed");
 
-    Err::errCheck(listen(sock, 5) == -1, "listen failed");
+    int epfd = epoll_create1(0);
+    epoll_event events[maxn], ev;
+
+    epoll_ctl(epfd, EPOLL_CTL_ADD, sock, &ev);
+    // Err::errCheck(listen(sock, 5) == -1, "listen failed");
     while(1){
-        int client;
-        sockaddr_in clientAddr;
-        socklen_t socklen = sizeof(clientAddr);
-        client = accept(sock, (sockaddr *)&clientAddr, &socklen);
+        int nfds = epoll_wait(epfd, events, maxn, -1);
+        for(size_t i; i < nfds; i++){
+            if(events[i].data.fd == sock){
+                int client;
+                sockaddr_in clientAddr;
+                socklen_t socklen = sizeof(clientAddr);
+                client = accept(sock, (sockaddr *)&clientAddr, &socklen);
+                Err::errCheck(client == -1, "accept failed");
 
-        Err::errCheck(client == -1, "accept failed");
+                printf("new client sock:%d,which ip is %s,port is %d\n", client,
+                    inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
 
-        printf("new client sock:%d,which ip is %s,port is %d\n", client,
-            inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
-        char data[maxn] = { 0 };
-        // int ret = recv(client, data, 255, 0);
-        int readSize = read(client, data, sizeof(data));
-        Err::errCheck(readSize == -1, "read failed");
-        printf("message from client:%s\n", data);
+                ev.data.fd = client;
+                ev.events = EPOLLIN | EPOLLET;//et use with unblock io
+
+                epoll_ctl(epfd, EPOLL_CTL_ADD, client, &ev);
+
+            }
+            else if(events[i].events & EPOLLIN){
+                int client = events[i].data.fd;
+                char data[maxn] = { 0 };
+                fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK);
+                while(1){
+                    memset(data, 0, sizeof(data));
+                    int readSize = read(client, data, sizeof(data));
+
+                    //unblock io will return < 0 and 
+                    //errno == EAGAIN or EWOULDBLOCK while io finish.
+                    if(readSize > 0){
+                        printf("message from client %d:%s\n", client, data);
+                    }
+                    else if(readSize == -1 && errno == EINTR){
+                        printf("continue reading\n");
+                        continue;
+                    }
+                    else if(readSize == -1 && (errno == EAGAIN) || (errno == EWOULDBLOCK)){
+                        printf("client %d read over.\n", client);
+                        break;
+                    }
+                    else if(readSize == 0){
+                        printf("%d disconnect\n", client);
+                        close(client);
+                        break;
+                    }
+                }
+            }
+            else{
+
+            }
+        }
     }
     close(sock);
     return 0;
